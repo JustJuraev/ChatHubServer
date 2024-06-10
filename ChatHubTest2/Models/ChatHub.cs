@@ -6,7 +6,7 @@ namespace ChatHubTest2.Models
 
     public class ChatHub : Hub
     {
-        private static Dictionary<string, string> ClientConnections = new Dictionary<string, string>();
+        private static Dictionary<string, UserOnlineChat> ClientConnections = new Dictionary<string, UserOnlineChat>();
         private ApplicationContext _context;
 
         public ChatHub(ApplicationContext context)
@@ -33,7 +33,7 @@ namespace ChatHubTest2.Models
         {
             
             var recipientId = _context.Users.FirstOrDefault(x => x.Name == recipient);
-            var cc = ClientConnections.Where(x => x.Value == Context.ConnectionId).FirstOrDefault();
+            var cc = ClientConnections.Where(x => x.Value.ConnectionId == Context.ConnectionId).FirstOrDefault();
             var senderId = _context.Users.Where(x => x.Name == cc.Key).FirstOrDefault();
             var chatId = ReturnChatId(senderId.Id.ToString(), recipientId.Id.ToString());
             var msg = new Message
@@ -68,13 +68,24 @@ namespace ChatHubTest2.Models
             {
                 try
                 {
-                   
-                    var client = Clients.Client(ClientConnections[recipient]);
-                    msgU.UserName = senderId.Name;
-                    msgU.StatusSender = 300;
-                    await Clients.Client(Context.ConnectionId).SendAsync("PrivateMessage", "ds", msgU);
-                    string updatedMessage = $"{senderId.Name}:{message}     {msg.SendTime}";
-                    await client.SendAsync("PrivateMessage", updatedMessage, msgU);
+                    if (ClientConnections[recipient].Chat == senderId.Name)
+                    {
+                        var client = Clients.Client(ClientConnections[recipient].ConnectionId);
+                        msgU.UserSenderName = senderId.Name;
+                        msgU.UserRecipientName = recipientId.Name;
+                        msgU.StatusSender = 300;
+                        msgU.StatusRecipient = 300;
+                        await Clients.Client(Context.ConnectionId).SendAsync("PrivateMessage", "ds", msgU);
+                        string updatedMessage = $"{senderId.Name}:{message}     {msg.SendTime}";
+                        await client.SendAsync("PrivateMessage", updatedMessage, msgU);
+                    }
+                    else
+                    {
+                        msgU.UserSenderName = senderId.Name;
+                        msgU.UserRecipientName = recipientId.Name;
+                        var client = Clients.Client(Context.ConnectionId);
+                        await client.SendAsync("PrivateMessage", "", msgU);
+                    }
                     
                 }
                 catch (Exception ex)
@@ -84,6 +95,8 @@ namespace ChatHubTest2.Models
             }
             else
             {
+                msgU.UserSenderName = senderId.Name;
+                msgU.UserRecipientName = recipientId.Name;
                 var client = Clients.Client(Context.ConnectionId);
                 await client.SendAsync("PrivateMessage", "", msgU);
             }
@@ -102,18 +115,30 @@ namespace ChatHubTest2.Models
                 _context.Messages.Update(message);
                 _context.SaveChanges();
             }
-            if (messages.Count > 0 && ClientConnections[clientName.UserName] != null)
+            if (messages.Count > 0 && ClientConnections[clientName.UserSenderName] != null)
             {
-                var client = Clients.Client(ClientConnections[clientName.UserName]);
+                var client = Clients.Client(ClientConnections[clientName.UserSenderName].ConnectionId);
                 await client.SendAsync("ReadMessages", messages);
             }
         }
 
-       
+        public void UserCurrentChat(string user, string userChat)
+        {
+            var userConnection = ClientConnections[user];
+            if (userConnection != null)
+            {
+                userConnection.Chat = userChat;
+            }
+            //var test = ClientConnections;
+        }
+
+
         public override async Task OnConnectedAsync()
         {
             var clientId = Context.GetHttpContext().Request.Query["clientId"];
-            ClientConnections[clientId] = Context.ConnectionId;
+            ClientConnections.Add(clientId, new UserOnlineChat { ConnectionId = Context.ConnectionId, Chat = "" });
+          //  ClientConnections[clientId].ConnectionId = Context.ConnectionId;
+            
             await base.OnConnectedAsync();
            
         }
@@ -149,6 +174,63 @@ namespace ChatHubTest2.Models
             }
 
             await Clients.All.SendAsync("OnlineUsers", onlineUsers);
+        }
+
+        public void SendToGroup(MessageUser messageUser)
+        {
+            var cc = ClientConnections.Where(x => x.Value.ConnectionId == Context.ConnectionId).FirstOrDefault();
+            var senderId = _context.Users.Where(x => x.Name == cc.Key).FirstOrDefault();
+            var msg = new Message
+            {
+                Id = Guid.NewGuid(),
+                ChatId = messageUser.UserRecipientName,
+                RecipientId = messageUser.UserRecipientName,
+                SenderId = senderId.Id.ToString(),
+                SenderStatus = 200,
+                StatusRecipient = 400,
+                SendTime = DateTime.UtcNow,
+                StringText = messageUser.StringText,
+                TempId = messageUser.TempId,
+            };
+
+            _context.Messages.Add(msg);
+            _context.SaveChanges();
+            var groupName = _context.Chats.FirstOrDefault(x => x.Id.ToString() == msg.RecipientId);
+            var msgU = new MessageUser
+            {
+                Id = msg.Id,
+                TempId = msg.TempId,
+                SendTime = msg.SendTime,
+                StatusSender = msg.SenderStatus,
+                StatusRecipient = msg.StatusRecipient,
+                StringText = msg.StringText,
+                UserRecipientName = groupName.ChatName,
+                UserSenderName = senderId.Name,
+                GroupId = msg.ChatId
+                
+            };
+
+            var usersId = _context.ChatMembers.Where(x => x.ChatId == msg.ChatId && x.UserId != msg.SenderId).Select(x => x.UserId).ToList();
+            foreach(var user in usersId )
+            {
+                var userName = _context.Users.FirstOrDefault(x => x.Id.ToString() == user);
+                if (ClientConnections.ContainsKey(userName.Name) && ClientConnections[userName.Name].Chat == msg.ChatId)
+                {
+                    var clientOnline = Clients.Client(ClientConnections[userName.Name].ConnectionId);
+                  
+                    msgU.StatusSender = 300;
+                    msgU.StatusRecipient = 300;
+                    Clients.Client(Context.ConnectionId).SendAsync("GroupMessage", msgU);
+                   
+                    clientOnline.SendAsync("GroupMessage", msgU);
+                    break;
+                }
+            }
+            if (msgU.StatusSender != 300)
+            {
+                var client = Clients.Client(Context.ConnectionId);
+                client.SendAsync("GroupMessage", msgU);
+            }
         }
 
     }

@@ -15,8 +15,37 @@ namespace ChatHubTest2.Controllers
             _context = context;
         }
 
-        [HttpPost]
-        public IActionResult GetAllMessages([FromBody] ChatMembersUserId chatMembersUserId)
+        [HttpPost("getMessagesfromGroupChat")]
+        public IActionResult GetAllMessagesFromGroupChat([FromBody] UserGroup userGroup)
+        {
+            var messages = _context.Messages.Where(x => x.ChatId == userGroup.ChatId).ToList();
+            List<MessageUser> messageUsers = new List<MessageUser>();
+
+            foreach (var message in messages)
+            {
+                var user = _context.Users.FirstOrDefault(x => x.Id.ToString() == message.SenderId);
+                var userRecipient = _context.Users.FirstOrDefault(x => x.Id.ToString() == message.RecipientId);
+                var messageUser = new MessageUser
+                {
+                    Id = message.Id,
+                    SendTime = message.SendTime,
+                    StatusRecipient = message.StatusRecipient,
+                    StatusSender = message.SenderStatus,
+                    StringText = message.StringText,
+                    TempId = message.TempId,
+                    UserSenderName = user.Name,
+                    UserRecipientName = userGroup.ChatName,
+                    GroupId = message.ChatId
+                };
+                messageUsers.Add(messageUser);
+            }
+
+            return Ok(messageUsers);
+        }
+
+
+        [HttpPost("getMesagesfromUserChat")]
+        public IActionResult GetAllMessagesFromUserChat([FromBody] ChatMembersUserId chatMembersUserId)
         {
 
             var test = chatMembersUserId;
@@ -36,29 +65,21 @@ namespace ChatHubTest2.Controllers
                 var chatMessages = _context.Messages.Where(x => x.ChatId == chatIds.First()).ToList();
                 foreach (var chatMessage in chatMessages)
                 {
-                    ////Это по сути изменяет статус новых сообщений.
-                    //if (chatMessage.SenderId == chatMembersUserId.User2Id && chatMessage.StatusOfRead == 200)
-                    //{
-                    //    chatMessage.StatusOfRead = 300;
-                    //    _context.Messages.Update(chatMessage);
-                    //    _context.SaveChanges();
-                    //}
-
+                    
                     var user = _context.Users.FirstOrDefault(x => x.Id.ToString() == chatMessage.SenderId);
+                    var userRecipient = _context.Users.FirstOrDefault(x => x.Id.ToString() == chatMessage.RecipientId); 
                     if (user != null)
                     {
                         var messageUser = new MessageUser
                         {
                            Id = chatMessage.Id,
-                           //ChatId = chatMessage.ChatId,
                            TempId = chatMessage.TempId,
-                         //  RecipientId = chatMessage.RecipientId,
-                         //  SenderId = chatMessage.SenderId,
                            SendTime = chatMessage.SendTime,
                            StatusSender = chatMessage.SenderStatus,
                            StatusRecipient = chatMessage.StatusRecipient,
                            StringText = chatMessage.StringText,
-                           UserName = user.Name
+                           UserSenderName = user.Name,
+                           UserRecipientName = userRecipient.Name,
                         };
                         messages.Add(messageUser);
                     }

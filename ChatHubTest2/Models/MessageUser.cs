@@ -14,6 +14,10 @@
 
         public int StatusRecipient { get; set; } //400 - новое
 
-        public string? UserName { get; set; }   
+        public string? UserSenderName { get; set; }   
+
+        public string? UserRecipientName { get; set; }
+
+        public string? GroupId { get; set; }
     }
 }

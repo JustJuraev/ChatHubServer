@@ -15,8 +15,27 @@ namespace ChatHubTest2.Controllers
             _context = context;
         }
 
-       
-        [HttpPost]
+
+        [HttpPost("getUsersGroup")]
+        public IActionResult GetUsersGroups(UserNameModel userNameModel)
+        {
+            var groups = from chm in _context.ChatMembers
+                         join ch in _context.Chats on chm.ChatId equals ch.Id.ToString()
+                         select new UserGroup
+                         {
+                             ChatId = ch.Id.ToString(),
+                             ChatName = ch.ChatName,
+                             ChatMembers = chm.UserId
+                         };
+
+            var user = _context.Users.FirstOrDefault(x => x.Name == userNameModel.UserName);
+
+            var finalGroups = groups.Where(x => x.ChatMembers == user.Id.ToString() && x.ChatName != "").ToList();
+            return Ok(finalGroups);
+        }
+
+
+        [HttpPost("createChat")]
         public IActionResult Post([FromBody] ChatMembersUserId chatMembersUserId) 
         {
             var chatIds = _context.ChatMembers
@@ -32,6 +51,8 @@ namespace ChatHubTest2.Controllers
                 {
                     Id = Guid.NewGuid(),
                     Created = DateTime.UtcNow,
+                    ChatName = "",
+                    Type = 1
                 };
                 _context.Chats.Add(chat);
                 _context.SaveChanges();
@@ -55,6 +76,31 @@ namespace ChatHubTest2.Controllers
             }
 
             return Ok(chatMembersUserId);
+        }
+
+        [HttpPost("createChatGroup")]
+        public IActionResult CreateChatGroup([FromBody] GroupNameModel model)
+        {
+            var chat = new Chat
+            {
+                Id = Guid.NewGuid(),
+                Created = DateTime.UtcNow,
+                ChatName = model.GroupName,
+                Type = 2
+            };
+            var user = _context.Users.Where(x => x.Name == model.UserName).FirstOrDefault();
+            var chatmember = new ChatMember
+            {
+                Id = Guid.NewGuid(),
+                UserId = user.Id.ToString(),
+                ChatId = chat.Id.ToString(),
+            };
+
+            _context.Chats.Add(chat);
+            _context.ChatMembers.Add(chatmember);
+            _context.SaveChanges();
+
+            return Ok("200");
         }
 
     }
