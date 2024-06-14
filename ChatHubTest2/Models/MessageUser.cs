@@ -19,5 +19,11 @@
         public string? UserRecipientName { get; set; }
 
         public string? GroupId { get; set; }
+
+        public bool IsDeleted { get; set; }
+
+        public bool IsUpdated { get; set; }
+
+        public string? ParentMessageId { get; set; }
     }
 }

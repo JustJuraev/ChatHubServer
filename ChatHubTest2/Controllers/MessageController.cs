@@ -35,7 +35,9 @@ namespace ChatHubTest2.Controllers
                     TempId = message.TempId,
                     UserSenderName = user.Name,
                     UserRecipientName = userGroup.ChatName,
-                    GroupId = message.ChatId
+                    GroupId = message.ChatId,
+                    IsDeleted = message.IsDeleted,
+                    IsUpdated = message.IsUpdated,
                 };
                 messageUsers.Add(messageUser);
             }
@@ -62,7 +64,14 @@ namespace ChatHubTest2.Controllers
             var messages = new List<MessageUser>();
             if (chatIds.Count > 0)
             {
-                var chatMessages = _context.Messages.Where(x => x.ChatId == chatIds.First()).ToList();
+                var chat = new Chat();
+                foreach(var item in chatIds)
+                {
+                    var ch = _context.Chats.FirstOrDefault(x => x.Id.ToString() == item);
+                    if (ch.Type == 1)
+                        chat = ch;
+                }
+                var chatMessages = _context.Messages.Where(x => x.ChatId == chat.Id.ToString()).ToList();
                 foreach (var chatMessage in chatMessages)
                 {
                     
@@ -80,6 +89,8 @@ namespace ChatHubTest2.Controllers
                            StringText = chatMessage.StringText,
                            UserSenderName = user.Name,
                            UserRecipientName = userRecipient.Name,
+                            IsDeleted = chatMessage.IsDeleted,
+                            IsUpdated = chatMessage.IsUpdated,
                         };
                         messages.Add(messageUser);
                     }

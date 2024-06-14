@@ -45,7 +45,17 @@ namespace ChatHubTest2.Controllers
            .Select(g => g.Key)
            .ToList();
 
-            if (chatIds.Count() == 0)
+            var chatCheck = new Chat();
+            foreach (var chatId in chatIds)
+            {
+                var chatFound = _context.Chats.FirstOrDefault(x => x.Id.ToString() == chatId);
+                if(chatFound?.Type == 1)
+                {
+                    chatCheck = chatFound;
+                }
+            }
+            
+            if (chatCheck.Type == 0)
             {
                 var chat = new Chat
                 {

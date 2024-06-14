@@ -8,6 +8,7 @@ namespace ChatHubTest2.Models
     {
         private static Dictionary<string, UserOnlineChat> ClientConnections = new Dictionary<string, UserOnlineChat>();
         private ApplicationContext _context;
+        private static Dictionary<string, Dictionary<string, int>> newMessages = new Dictionary<string, Dictionary<string, int>>();
 
         public ChatHub(ApplicationContext context)
         {
@@ -23,10 +24,15 @@ namespace ChatHubTest2.Models
            .Select(g => g.Key)
            .ToList();
 
-            if (chatIds.Count > 0)
-                return chatIds.First();
+            var finalChat = new Chat();
+            foreach (var chatId in chatIds)
+            {
+                var chat = _context.Chats.FirstOrDefault(x => x.Id.ToString() == chatId);
+                if (chat?.Type == 1)
+                    finalChat = chat;
+            }
 
-            return "";
+            return finalChat.Id.ToString();
         }
 
         public async Task SendToOnePerson(string recipient, MessageUser message)
@@ -48,7 +54,10 @@ namespace ChatHubTest2.Models
                 SenderStatus = 200,
                 StatusRecipient = 400
             };
-            
+            if(message.ParentMessageId != null)
+            {
+                msg.ParentMessageId = message.ParentMessageId.ToString();
+            }
 
             _context.Messages.Add(msg);
             _context.SaveChanges();
@@ -176,7 +185,7 @@ namespace ChatHubTest2.Models
             await Clients.All.SendAsync("OnlineUsers", onlineUsers);
         }
 
-        public void SendToGroup(MessageUser messageUser)
+        public async Task SendToGroup(MessageUser messageUser)
         {
             var cc = ClientConnections.Where(x => x.Value.ConnectionId == Context.ConnectionId).FirstOrDefault();
             var senderId = _context.Users.Where(x => x.Name == cc.Key).FirstOrDefault();
@@ -193,6 +202,9 @@ namespace ChatHubTest2.Models
                 TempId = messageUser.TempId,
             };
 
+            if(messageUser.ParentMessageId != null) 
+                msg.ParentMessageId = messageUser.ParentMessageId.ToString();
+
             _context.Messages.Add(msg);
             _context.SaveChanges();
             var groupName = _context.Chats.FirstOrDefault(x => x.Id.ToString() == msg.RecipientId);
@@ -207,31 +219,184 @@ namespace ChatHubTest2.Models
                 UserRecipientName = groupName.ChatName,
                 UserSenderName = senderId.Name,
                 GroupId = msg.ChatId
-                
+
             };
 
             var usersId = _context.ChatMembers.Where(x => x.ChatId == msg.ChatId && x.UserId != msg.SenderId).Select(x => x.UserId).ToList();
-            foreach(var user in usersId )
+            foreach (var user in usersId)
             {
                 var userName = _context.Users.FirstOrDefault(x => x.Id.ToString() == user);
                 if (ClientConnections.ContainsKey(userName.Name) && ClientConnections[userName.Name].Chat == msg.ChatId)
                 {
-                    var clientOnline = Clients.Client(ClientConnections[userName.Name].ConnectionId);
-                  
+                    //var clientOnline = Clients.Client(ClientConnections[userName.Name].ConnectionId);
+                    var test = ClientConnections[userName.Name];
                     msgU.StatusSender = 300;
                     msgU.StatusRecipient = 300;
-                    Clients.Client(Context.ConnectionId).SendAsync("GroupMessage", msgU);
-                   
-                    clientOnline.SendAsync("GroupMessage", msgU);
+
+                    await Clients.Client(ClientConnections[userName.Name].ConnectionId).SendAsync("GroupMessage", msgU);
+                    await Clients.Client(Context.ConnectionId).SendAsync("GroupMessage", msgU);
+
                     break;
                 }
             }
             if (msgU.StatusSender != 300)
             {
                 var client = Clients.Client(Context.ConnectionId);
-                client.SendAsync("GroupMessage", msgU);
+               await client.SendAsync("GroupMessage", msgU);
             }
         }
 
+        public void NewMessagesRead(string recipient)
+        {
+            var cc = ClientConnections.Where(x => x.Value.ConnectionId == Context.ConnectionId).FirstOrDefault();
+            var senderId = _context.Users.Where(x => x.Name == cc.Key).FirstOrDefault();
+            var test = newMessages;
+            if (newMessages[senderId.Name].ContainsKey(recipient))
+            {
+                newMessages[senderId.Name].Remove(recipient);
+             
+            }
+
+            Clients.Client(Context.ConnectionId).SendAsync("ReadMessagesLive", newMessages[senderId.Name]);
+        }
+
+        public void NewMessagesLive(string recipient, MessageUser message)
+        {
+          
+            var user = _context.Users.FirstOrDefault(x => x.Name == recipient);
+            var chat = _context.Chats.FirstOrDefault(x => x.Id.ToString() == recipient);
+            var cc = ClientConnections.Where(x => x.Value.ConnectionId == Context.ConnectionId).FirstOrDefault();
+            var senderId = _context.Users.Where(x => x.Name == cc.Key).FirstOrDefault();
+            if (user != null)
+            {
+                if (ClientConnections.ContainsKey(recipient))
+                {
+                    if (ClientConnections[recipient].Chat != senderId.Name)
+                    {
+                       // var test2 = newMessages;
+                        if (!newMessages[recipient].ContainsKey(senderId.Name))
+                        {
+                            newMessages[recipient].Add(senderId.Name, 1);
+                        }
+                        else
+                        {
+                            newMessages[recipient][senderId.Name] += 1;
+                        }
+                    }
+                }
+                if (ClientConnections.ContainsKey(recipient))
+                {
+
+                    Clients.Client(ClientConnections[recipient].ConnectionId).SendAsync("ReadMessagesLive", newMessages[recipient]);
+                }
+            }
+
+            if (chat != null)
+            {
+                var usersId = _context.ChatMembers.Where(x => x.ChatId == recipient && x.UserId != senderId.Id.ToString()).Select(x => x.UserId).ToList();
+                User userSend = new User();
+                foreach (var item in usersId)
+                {
+                    var userName = _context.Users.FirstOrDefault(x => x.Id.ToString() == item);
+                   
+                    if (ClientConnections.ContainsKey(userName.Name) && ClientConnections[userName.Name].Chat != recipient)
+                    {
+                        userSend = userName;
+                        if (!newMessages[userSend.Name].ContainsKey(recipient))
+                        {
+                            newMessages[userSend.Name].Add(recipient, 1);
+                        }
+                        else
+                        {
+                            newMessages[userSend.Name][recipient] += 1;
+                        }
+
+                        break;
+                    }
+                }
+                if (userSend.Name != null && ClientConnections.ContainsKey(userSend.Name))
+                {
+
+                    Clients.Client(ClientConnections[userSend.Name].ConnectionId).SendAsync("ReadMessagesLive", newMessages[userSend.Name]);
+                }
+            }
+           
+        }
+
+        public void NewMessages(string currentUserName)
+        {
+            if(!newMessages.ContainsKey(currentUserName))
+            {
+                newMessages.Add(currentUserName, new Dictionary<string, int>());
+            }
+            var currentUser = _context.Users.FirstOrDefault(x => x.Name == currentUserName);
+            var users = _context.Users.Where(x => x.Id != currentUser.Id).ToList();
+            foreach(var user in users)
+            {
+                var messages = _context.Messages.Where(x => x.SenderId == user.Id.ToString() && x.RecipientId == currentUser.Id.ToString() && x.StatusRecipient == 400 && x.IsDeleted == false).ToList();
+                if (!newMessages[currentUserName].ContainsKey(user.Name))
+                {
+                    newMessages[currentUserName].Add(user.Name, messages.Count());
+                }
+                newMessages[currentUserName][user.Name] = messages.Count();
+            }
+            var chatMembers = _context.ChatMembers.Where(x => x.UserId == currentUser.Id.ToString()).ToList();
+            foreach(var chatMember in chatMembers)
+            {
+                var chat = _context.Chats.FirstOrDefault(x => x.Id.ToString() == chatMember.ChatId && x.Type == 2);
+                if(chat != null)
+                {
+                    var chusers = _context.ChatMembers.Where(x => x.UserId != currentUser.Id.ToString() && x.ChatId == chat.Id.ToString()).ToList();
+                    foreach(var item in  chusers)
+                    {
+                        var messages = _context.Messages.Where(x => x.SenderId == item.UserId && x.RecipientId == chat.Id.ToString() && x.StatusRecipient == 400 && x.IsDeleted == false).ToList();
+                        if (!newMessages[currentUserName].ContainsKey(chat.Id.ToString()))
+                        {
+                            newMessages[currentUserName].Add(chat.Id.ToString(), messages.Count());
+                        }
+                        newMessages[currentUserName][chat.Id.ToString()] += messages.Count();
+                    }
+
+                }
+            }
+
+           
+            Clients.Client(Context.ConnectionId).SendAsync("ReadMessagesLive", newMessages[currentUserName]);
+        }
+
+        public void MessageStatusToUpdate(int index, MessageUser message)
+        {
+            var msg = _context.Messages.FirstOrDefault(x => x.Id == message.Id);
+            if (msg != null)
+            {
+                msg.IsUpdated = true;
+                msg.StringText = message.StringText;
+                _context.Messages.Update(msg);
+                _context.SaveChanges();
+
+                Clients.Client(Context.ConnectionId).SendAsync("MessageUpdate", index, message);
+            }
+        }
+
+        //public void MessageAnswer(MessageUser message)
+        //{
+        //    var msg = _context.Messages.FirstOrDefault(x => x.Id == message.Id);
+        //    if (msg != null)
+        //    {
+        //    }
+        //}
+
+        public void MessageStatusToDelete(int index, MessageUser message)
+        {
+            var msg = _context.Messages.FirstOrDefault(x => x.Id == message.Id);
+            if(msg != null)
+            {
+                msg.IsDeleted = true;
+                _context.Messages.Update(msg);
+                _context.SaveChanges();
+
+                Clients.Client(Context.ConnectionId).SendAsync("MessageDelete", index);
+            }
+        }
     }
 }
