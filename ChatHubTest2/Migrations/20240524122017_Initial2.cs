@@ -1,5 +1,4 @@
-﻿using System;
-using Microsoft.EntityFrameworkCore.Migrations;
+﻿using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
@@ -55,7 +54,7 @@ namespace ChatHubTest2.Migrations
                     table.PrimaryKey("PK_Messages", x => x.Id);
                 });
 
-            
+
         }
 
         /// <inheritdoc />
@@ -70,7 +69,7 @@ namespace ChatHubTest2.Migrations
             migrationBuilder.DropTable(
                 name: "Messages");
 
-           
+
         }
     }
 }

@@ -1,5 +1,4 @@
 ﻿using ChatHubTest2.Models;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
 namespace ChatHubTest2.Controllers
@@ -36,7 +35,7 @@ namespace ChatHubTest2.Controllers
 
 
         [HttpPost("createChat")]
-        public IActionResult Post([FromBody] ChatMembersUserId chatMembersUserId) 
+        public IActionResult Post([FromBody] ChatMembersUserId chatMembersUserId)
         {
             var chatIds = _context.ChatMembers
            .Where(cm => cm.UserId == chatMembersUserId.User1Id || cm.UserId == chatMembersUserId.User2Id)
@@ -49,12 +48,12 @@ namespace ChatHubTest2.Controllers
             foreach (var chatId in chatIds)
             {
                 var chatFound = _context.Chats.FirstOrDefault(x => x.Id.ToString() == chatId);
-                if(chatFound?.Type == 1)
+                if (chatFound?.Type == 1)
                 {
                     chatCheck = chatFound;
                 }
             }
-            
+
             if (chatCheck.Type == 0)
             {
                 var chat = new Chat

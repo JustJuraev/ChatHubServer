@@ -1,0 +1,31 @@
+version: '3.4'
+
+services:
+  chathubtest2:
+    image: ${DOCKER_REGISTRY-}chathubtest2
+    container_name: ChatHubServer
+    build:
+      context: .
+      dockerfile: ChatHubTest2/Dockerfile
+    ports:
+     - "8088:80"
+    environment:
+      ConnectionStrings__DataBase: "Host=db;Database=chathub;Username=postgres;Password=123456"
+    depends_on:
+    - db
+
+  db:
+    container_name: db
+    image: postgres:16
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=123456
+      - POSTGRES_DB=chathub
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+ 
+volumes:
+  pgdata: {}
+

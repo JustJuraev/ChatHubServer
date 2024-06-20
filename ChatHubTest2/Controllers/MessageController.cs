@@ -1,5 +1,4 @@
 ﻿using ChatHubTest2.Models;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
 namespace ChatHubTest2.Controllers
@@ -50,7 +49,7 @@ namespace ChatHubTest2.Controllers
         public IActionResult GetAllMessagesFromUserChat([FromBody] ChatMembersUserId chatMembersUserId)
         {
 
-            var test = chatMembersUserId;
+           
 
             var chatIds = _context.ChatMembers
           .Where(cm => cm.UserId == chatMembersUserId.User1Id || cm.UserId == chatMembersUserId.User2Id)
@@ -59,13 +58,13 @@ namespace ChatHubTest2.Controllers
           .Select(g => g.Key)
           .ToList();
 
-            
+
 
             var messages = new List<MessageUser>();
             if (chatIds.Count > 0)
             {
                 var chat = new Chat();
-                foreach(var item in chatIds)
+                foreach (var item in chatIds)
                 {
                     var ch = _context.Chats.FirstOrDefault(x => x.Id.ToString() == item);
                     if (ch.Type == 1)
@@ -74,21 +73,21 @@ namespace ChatHubTest2.Controllers
                 var chatMessages = _context.Messages.Where(x => x.ChatId == chat.Id.ToString()).ToList();
                 foreach (var chatMessage in chatMessages)
                 {
-                    
-                    var user = _context.Users.FirstOrDefault(x => x.Id.ToString() == chatMessage.SenderId);
-                    var userRecipient = _context.Users.FirstOrDefault(x => x.Id.ToString() == chatMessage.RecipientId); 
+
+                    var user = _context.IdenUsers.FirstOrDefault(x => x.Id == chatMessage.SenderId);
+                    var userRecipient = _context.IdenUsers.FirstOrDefault(x => x.Id == chatMessage.RecipientId);
                     if (user != null)
                     {
                         var messageUser = new MessageUser
                         {
-                           Id = chatMessage.Id,
-                           TempId = chatMessage.TempId,
-                           SendTime = chatMessage.SendTime,
-                           StatusSender = chatMessage.SenderStatus,
-                           StatusRecipient = chatMessage.StatusRecipient,
-                           StringText = chatMessage.StringText,
-                           UserSenderName = user.Name,
-                           UserRecipientName = userRecipient.Name,
+                            Id = chatMessage.Id,
+                            TempId = chatMessage.TempId,
+                            SendTime = chatMessage.SendTime,
+                            StatusSender = chatMessage.SenderStatus,
+                            StatusRecipient = chatMessage.StatusRecipient,
+                            StringText = chatMessage.StringText,
+                            UserSenderName = user.UserName,
+                            UserRecipientName = userRecipient.UserName,
                             IsDeleted = chatMessage.IsDeleted,
                             IsUpdated = chatMessage.IsUpdated,
                         };

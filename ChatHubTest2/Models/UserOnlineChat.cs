@@ -2,7 +2,7 @@
 {
     public class UserOnlineChat
     {
-        public string? Chat {  get; set; }
+        public string? Chat { get; set; }
 
         public string? ConnectionId { get; set; }
     }

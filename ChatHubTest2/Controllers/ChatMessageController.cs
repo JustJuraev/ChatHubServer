@@ -1,5 +1,4 @@
 ﻿using ChatHubTest2.Models;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
 namespace ChatHubTest2.Controllers

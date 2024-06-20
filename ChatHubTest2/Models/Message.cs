@@ -16,7 +16,7 @@
 
         public string? ChatId { get; set; }
 
-        public int SenderStatus{ get; set; } //100 - Отправлено, 200-Доставлено, 300-Прочитано
+        public int SenderStatus { get; set; } //100 - Отправлено, 200-Доставлено, 300-Прочитано
 
         public int StatusRecipient { get; set; } //400 - новое
 

@@ -4,6 +4,6 @@
     {
         public string? User1Id { get; set; }
 
-        public string? User2Id { get; set;}
+        public string? User2Id { get; set; }
     }
 }
