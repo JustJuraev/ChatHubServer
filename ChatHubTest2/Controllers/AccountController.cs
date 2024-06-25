@@ -1,5 +1,4 @@
 ﻿using ChatHubTest2.Models;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
@@ -47,26 +46,43 @@ namespace ChatHubTest2.Controllers
                 _configuration["Jwt:Issuer"],
                 _configuration["Jwt:Issuer"],
                 claims,
-                expires: DateTime.Now.AddMinutes(30),
+                expires: DateTime.Now.AddHours(1),
                 signingCredentials: creds
             );
 
             return new JwtSecurityTokenHandler().WriteToken(token);
         }
 
+        [HttpPost("refreshToken")]
+        public string RefreshToken([FromBody] RefreshTokenModel refreshTokenModel)
+        {
+            string result = "";
+            var user = _context.IdenUsers.FirstOrDefault(x => x.UserName == refreshTokenModel.UserName);
+            var appcc = _context.ApplicationSessions.FirstOrDefault(x => x.UserId.ToString() == user.Id);
+            if(appcc != null)
+            {
+                if(refreshTokenModel.RefreshToken == appcc.RefreshTokenId.ToString() && appcc.ExpirationDate > DateTime.UtcNow) 
+                {
+                    result =  GenerateJwtToken(user); 
+                }
+            }
+            return result;
+        }
+
+
         [HttpPost]
         [Route("/api/Register")]
         public async Task<IActionResult> Register(LoginViewModel registerViewModel)
         {
             string token = "";
-
+            string refreshtokenid = "";
             IdenUser user = new IdenUser()
             {
                 Login = registerViewModel.Login,
                 UserName = registerViewModel.Login,
-             
+
             };
-          
+
 
             try
             {
@@ -91,11 +107,24 @@ namespace ChatHubTest2.Controllers
 
 
                     await _userManager.AddToRoleAsync(user, "user");
-                   // token = GenerateJwtToken(user);
+                    token = GenerateJwtToken(user);
+
+                    
+                    var appss = new ApplicationSession
+                    {
+                        Id = Guid.NewGuid(),
+                        UserId = new Guid(user.Id),
+                        RefreshTokenId = Guid.NewGuid(),
+                        CreatedTime = DateTime.UtcNow,
+                        ExpirationDate = DateTime.UtcNow.AddHours(35),
+                    };
+                    _context.ApplicationSessions.Add(appss);
+                    _context.SaveChanges();
+                    refreshtokenid = appss.RefreshTokenId.ToString();
                 }
                 else
                 {
-                    
+
                     return BadRequest(new UserViewModel() { Message = result.Errors.First().Description });
                 }
             }
@@ -104,7 +133,7 @@ namespace ChatHubTest2.Controllers
                 return BadRequest(new UserViewModel() { Message = $"{ex.Message}" });
             }
 
-            return Ok(new UserViewModel() { Message = "Все прошло успешно", Token = token });
+            return Ok(new UserViewModel() { Message = "Все прошло успешно", Token = token, RefreshTokenId = refreshtokenid });
         }
 
 
@@ -112,19 +141,70 @@ namespace ChatHubTest2.Controllers
         [Route("/api/Login")]
         public async Task<IActionResult> Login(LoginViewModel loginViewModel)
         {
+            var userToFound = _context.IdenUsers.FirstOrDefault(x => x.UserName == loginViewModel.Login);
+            if (userToFound == null)
+            {
+                return Ok(await Register(loginViewModel));
+            }
+
             var user = _context.IdenUsers.FirstOrDefault(x => x.UserName == loginViewModel.Login);
 
             bool isValid = await _userManager.CheckPasswordAsync(user, loginViewModel.Password);
 
             if (user == null || !isValid)
             {
-             return BadRequest(new UserViewModel() { Message = "Неправильный логин или пароль" });
+                return BadRequest(new UserViewModel() { Message = "Неправильный логин или пароль" });
             }
 
             var result = await _signInManager.PasswordSignInAsync(user, loginViewModel.Password, isPersistent: false, false);
             var token = GenerateJwtToken(user);
+            string refreshtokenid = "";
+            var appss = _context.ApplicationSessions.FirstOrDefault(x => x.UserId.ToString() == user.Id);
+            if (appss != null && appss.ExpirationDate > DateTime.UtcNow)
+                refreshtokenid = appss.RefreshTokenId.ToString();
+            else
+            {
+                appss.RefreshTokenId = Guid.NewGuid();
+                appss.CreatedTime = DateTime.UtcNow;
+                appss.ExpirationDate = DateTime.UtcNow.AddHours(35);
+                _context.ApplicationSessions.Update(appss);
+                _context.SaveChanges();
+                refreshtokenid = appss.RefreshTokenId.ToString();
+            }
+            return Ok(new UserViewModel { Message = "Все прошло успешно", Token = token, UserName = user.UserName, RefreshTokenId = refreshtokenid });
+        }
 
-            return Ok(new UserViewModel { Message = "Все прошло успешно", Token = token, UserName = user.UserName });
+        [HttpPost("CheckToken")]
+        public bool IsTokenValid([FromBody] TokenCheckClass tokenCheckClass)
+        {
+            if (string.IsNullOrEmpty(tokenCheckClass.Token))
+            {
+                return false;
+            }
+
+            var tokenHandler = new JwtSecurityTokenHandler();
+            var key = Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]);
+
+            try
+            {
+                tokenHandler.ValidateToken(tokenCheckClass.Token, new TokenValidationParameters
+                {
+                    ValidateIssuerSigningKey = true,
+                    IssuerSigningKey = new SymmetricSecurityKey(key),
+                    ValidateIssuer = true,
+                    ValidateAudience = true,
+                    ValidIssuer = _configuration["Jwt:Issuer"],
+                    ValidAudience = _configuration["Jwt:Issuer"],
+                    ValidateLifetime = true, 
+                    ClockSkew = TimeSpan.Zero
+                }, out SecurityToken validatedToken);
+
+                return validatedToken != null;
+            }
+            catch
+            {
+                return false;
+            }
         }
     }
 }
