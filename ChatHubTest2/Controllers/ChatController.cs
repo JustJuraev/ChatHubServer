@@ -1,5 +1,6 @@
 ﻿using ChatHubTest2.Models;
 using Microsoft.AspNetCore.Mvc;
+using System.Text.Json;
 
 namespace ChatHubTest2.Controllers
 {
@@ -12,6 +13,26 @@ namespace ChatHubTest2.Controllers
         public ChatController(ApplicationContext context)
         {
             _context = context;
+        }
+        private List<User> GetIdenUsers()
+        {
+            List<User> users = new List<User>();
+            using (HttpClientHandler handler = new HttpClientHandler())
+            {
+                handler.ServerCertificateCustomValidationCallback = (message, cert, chain, errors) => { return true; };
+                using (HttpClient client = new HttpClient(handler))
+                {
+                    string url = "https://chathubidentity:443/api/User";
+                    HttpResponseMessage response = client.GetAsync(url).Result;
+                    if (response.IsSuccessStatusCode)
+                    {
+                        string responseBody = response.Content.ReadAsStringAsync().Result;
+                        List<User> userNames = JsonSerializer.Deserialize<List<User>>(responseBody);
+                        users = userNames;
+                    }
+                }
+            }
+            return users;
         }
 
 
@@ -27,7 +48,7 @@ namespace ChatHubTest2.Controllers
                              ChatMembers = chm.UserId
                          };
 
-            var user = _context.Users.FirstOrDefault(x => x.Name == userNameModel.UserName);
+            var user = GetIdenUsers().FirstOrDefault(x => x.Name == userNameModel.UserName);
 
             var finalGroups = groups.Where(x => x.ChatMembers == user.Id.ToString() && x.ChatName != "").ToList();
             return Ok(finalGroups);
@@ -97,7 +118,7 @@ namespace ChatHubTest2.Controllers
                 ChatName = model.GroupName,
                 Type = 2
             };
-            var user = _context.Users.Where(x => x.Name == model.UserName).FirstOrDefault();
+            var user = GetIdenUsers().Where(x => x.Name == model.UserName).FirstOrDefault();
             var chatmember = new ChatMember
             {
                 Id = Guid.NewGuid(),
